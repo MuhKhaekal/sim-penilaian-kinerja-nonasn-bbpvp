@@ -5,9 +5,9 @@ import FormPresensi from "@/components/FormPresensi";
 import { checkDateStatus, getWitaDate } from "@/lib/utils";
 import { getPresensiByDate } from "@/lib/actions/presensi";
 
-// 🔴 1. TAMBAHKAN DEFINISI TIPE UNTUK DATA LAMPAU
 type PastData = {
   status_verifikasi: string;
+  status_kehadiran: string; // 🔴 1. Ditambahkan ke dalam definisi tipe
   uraian_aktivitas: string;
   kendala: string | null;
   lampiran: string[] | null;
@@ -15,8 +15,6 @@ type PastData = {
 
 export default function PegawaiDashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(getWitaDate());
-
-  // 🔴 2. UBAH any MENJADI PastData
   const [pastData, setPastData] = useState<PastData | null>(null);
   const [isLoadingPast, setIsLoadingPast] = useState(false);
 
@@ -31,7 +29,6 @@ export default function PegawaiDashboard() {
 
   useEffect(() => {
     if (status === "PAST") {
-      // 🔴 3. BUNGKUS DENGAN setTimeout AGAR AMAN DARI LINTER
       const timer = setTimeout(() => {
         setIsLoadingPast(true);
 
@@ -39,27 +36,24 @@ export default function PegawaiDashboard() {
           const dateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split("T")[0];
 
           const response = await getPresensiByDate(dateStr);
-          setPastData(response.data as PastData); // Beri tahu TypeScript bahwa ini adalah PastData
+          setPastData(response.data as PastData);
           setIsLoadingPast(false);
         };
 
         fetchPastData();
       }, 0);
 
-      // Bersihkan timer
       return () => clearTimeout(timer);
     }
   }, [selectedDate, status]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header Interaktif */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Presensi Harian</h2>
         <p className="text-gray-500 text-sm">Pilih tanggal untuk melihat atau mengisi presensi.</p>
       </div>
 
-      {/* Mini Kalender Interaktif (TETAP SAMA SEPERTI SEBELUMNYA) */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto">
         {calendarDays.map((date, idx) => {
           const isSelected = date.getDate() === selectedDate.getDate();
@@ -79,7 +73,6 @@ export default function PegawaiDashboard() {
         })}
       </div>
 
-      {/* Area Konten */}
       <div className="mt-6">
         {status === "TODAY" && <FormPresensi />}
 
@@ -90,7 +83,6 @@ export default function PegawaiDashboard() {
           </div>
         )}
 
-        {/* 🔴 TAMPILAN BARU UNTUK TANGGAL LAMPAU */}
         {status === "PAST" && (
           <div className="rounded-xl bg-white p-6 border border-gray-200 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 border-b pb-3 mb-4">Riwayat: {selectedDate.toLocaleDateString("id-ID", { dateStyle: "full" })}</h3>
@@ -99,30 +91,43 @@ export default function PegawaiDashboard() {
               <p className="text-center text-gray-500 py-4 animate-pulse">Memuat data...</p>
             ) : pastData ? (
               <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Status Verifikasi</p>
-                  <span
-                    className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                      pastData.status_verifikasi === "PENDING"
-                        ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                        : pastData.status_verifikasi === "DISETUJUI"
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : "bg-red-50 text-red-700 border-red-200"
-                    }`}
-                  >
-                    {pastData.status_verifikasi}
-                  </span>
+                
+                {/* 🔴 2. Area Status Persetujuan dan Kehadiran Bersebelahan */}
+                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Status Persetujuan</p>
+                    <span
+                      className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold border ${
+                        pastData.status_verifikasi === "PENDING"
+                          ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                          : pastData.status_verifikasi === "DISETUJUI"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                      }`}
+                    >
+                      {pastData.status_verifikasi}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Keterangan Kehadiran</p>
+                    <p className="mt-1 font-bold text-blue-700 uppercase">
+                      {pastData.status_kehadiran || "Hadir"}
+                    </p>
+                  </div>
                 </div>
+
                 <div>
                   <p className="text-sm font-medium text-gray-500">Uraian Aktivitas</p>
                   <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-md border border-gray-100">{pastData.uraian_aktivitas}</p>
                 </div>
+                
                 {pastData.kendala && (
                   <div>
                     <p className="text-sm font-medium text-gray-500">Kendala</p>
                     <p className="mt-1 text-gray-900 bg-red-50 p-3 rounded-md border border-red-100">{pastData.kendala}</p>
                   </div>
                 )}
+                
                 <div>
                   <p className="text-sm font-medium text-gray-500">Lampiran</p>
                   <p className="text-sm mt-1 text-blue-600 font-medium">🔒 {pastData.lampiran?.length || 0} File Tersimpan Aman (Private Store)</p>

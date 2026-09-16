@@ -6,13 +6,16 @@ import { simpanDataPresensi } from "@/lib/actions/presensi";
 
 export default function FormPresensi() {
   const [koordinat, setKoordinat] = useState("Mendapatkan lokasi...");
+  
+  // 🔴 PERBAIKAN 1: Tambahkan State untuk menangkap nilai dropdown (Default: "Hadir")
+  const [statusKehadiran, setStatusKehadiran] = useState("Hadir");
+  
   const [uraian, setUraian] = useState("");
   const [kendala, setKendala] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 🔴 TAMBAHKAN STATE INI UNTUK NOTIFIKASI
   const [pesan, setPesan] = useState<{ tipe: "sukses" | "error"; teks: string } | null>(null);
 
   useEffect(() => {
@@ -34,7 +37,6 @@ export default function FormPresensi() {
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // ... (Logika file tetap sama seperti sebelumnya) ...
     if (!e.target.files) return;
     const selectedFiles = Array.from(e.target.files);
 
@@ -52,7 +54,7 @@ export default function FormPresensi() {
     }
 
     setFiles(selectedFiles);
-    setPesan(null); // Hapus pesan error saat file valid
+    setPesan(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,11 +66,15 @@ export default function FormPresensi() {
     }
 
     setIsLoading(true);
-    setPesan(null); // Reset pesan sebelum memproses
+    setPesan(null);
 
     try {
       const formData = new FormData();
       formData.append("koordinat", koordinat);
+      
+      // 🔴 PERBAIKAN 2: Masukkan nilai statusKehadiran ke dalam FormData yang akan dikirim ke Server
+      formData.append("status_kehadiran", statusKehadiran);
+      
       formData.append("uraian", uraian);
       formData.append("kendala", kendala);
       files.forEach((file) => formData.append("lampiran", file));
@@ -76,10 +82,12 @@ export default function FormPresensi() {
       const response = await simpanDataPresensi(formData);
 
       if (response.success) {
-        // 🔴 TAMPILKAN PESAN SUKSES
         setPesan({ tipe: "sukses", teks: "Berhasil! Presensi Anda hari ini telah tersimpan." });
+        
+        // Reset form setelah sukses
         setUraian("");
         setKendala("");
+        setStatusKehadiran("Hadir");
         setFiles([]);
       } else {
         setPesan({ tipe: "error", teks: response.message || "Gagal menyimpan data." });
@@ -108,6 +116,24 @@ export default function FormPresensi() {
       <div>
         <label className="block text-sm font-medium text-gray-700">Titik Koordinat (Otomatis)</label>
         <input type="text" value={koordinat} readOnly className="mt-1 block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500 text-sm" />
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-gray-700 mb-1">Status Kehadiran</label>
+        {/* 🔴 PERBAIKAN 3: Hubungkan tag <select> dengan state dan onChange */}
+        <select 
+          name="status_kehadiran" 
+          required 
+          value={statusKehadiran}
+          onChange={(e) => setStatusKehadiran(e.target.value)}
+          className="w-full rounded-md border-gray-300 border p-2 text-sm focus:border-blue-500"
+        >
+          <option value="Hadir">Hadir</option>
+          <option value="Terlambat">Terlambat</option>
+          <option value="Izin">Izin</option>
+          <option value="Sakit">Sakit</option>
+          <option value="Alfa">Alfa / Mangkir</option>
+        </select>
       </div>
 
       <div>
