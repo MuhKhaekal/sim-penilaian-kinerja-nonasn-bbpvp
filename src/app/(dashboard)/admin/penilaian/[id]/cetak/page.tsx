@@ -50,18 +50,21 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
   const alfa = detailNilai["alfa"] || "0";
 
   return (
-    <div className="bg-gray-200 min-h-screen py-10 print:py-0 print:bg-white text-black">
+    <div className="bg-gray-200 min-h-screen py-10 print:min-h-0 print:h-auto print:py-0 print:bg-white text-black print:block">
       <style
         dangerouslySetInnerHTML={{
           __html: `
         @media print {
-          /* 1. Hilangkan margin bawaan untuk membuang URL/Tanggal browser */
           @page { size: landscape; margin: 0; } 
           
-          /* 2. Bebaskan semua pembatasan tinggi dari layout parent (seperti h-screen) */
+          /* 🔴 2. HANCURKAN SEMUA BATASAN UKURAN (Force Flow) */
           html, body, main, div {
             height: auto !important;
+            max-height: none !important;
+            width: auto !important;
+            max-width: none !important;
             overflow: visible !important;
+            display: block !important; /* Mematikan flexbox/grid yang bisa menahan page-break */
           }
 
           body { 
@@ -71,33 +74,34 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             margin: 0; 
           }
           
-          /* Sembunyikan elemen yang tidak perlu (tanpa merusak flow) */
           .no-print, button { display: none !important; }
 
-          /* 3. KUNCI UTAMA: Kembalikan posisi ke STATIC (Bukan Absolute) agar bisa multi-halaman */
+          /* 🔴 3. Area cetak dilepas batasannya agar mengalir secara alami */
           #area-cetak { 
             position: static !important; 
             width: 100% !important; 
-            padding: 15mm !important; 
+            max-width: none !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 10mm !important; 
             margin: 0 !important; 
             box-shadow: none !important;
           }
 
-          /* 4. ATURAN CERDAS UNTUK TABEL MULTI-HALAMAN */
-          table { page-break-inside: auto; }
-          tr { page-break-inside: avoid; page-break-after: auto; } /* Baris tidak boleh terpotong di tengah */
-          thead { display: table-header-group; } /* Mengulang Header Tabel di halaman ke-2, ke-3, dst */
+          /* 🔴 4. Aturan Tabel */
+          table { page-break-inside: auto; width: 100% !important; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          thead { display: table-header-group; }
           tfoot { display: table-footer-group; }
           
-          /* Memaksa elemen Tanda Tangan tidak terpisah dari tabel jika ruang tidak cukup */
           .area-ttd { page-break-inside: avoid; }
         }
       `,
         }}
       />
 
-      {/* Kontainer Utama Cetak */}
-      <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:shadow-none print:p-0 text-[11px]">
+      {/* 🔴 5. Tambahkan print:max-w-none print:min-h-0 di area cetak utama */}
+      <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:max-w-none print:min-h-0 print:h-auto print:shadow-none print:p-0 text-[11px] print:block">
         
         <div className="flex justify-end mb-4 no-print">
           <PrintButton />
@@ -201,7 +205,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
           </table>
         </div>
 
-        {/* Area Tanda Tangan dikunci dengan class 'area-ttd' agar tidak terpisah sendirian ke halaman baru jika terpotong */}
+        {/* Area Tanda Tangan dikunci agar tidak terpotong mandiri */}
         <div className="flex justify-end mt-12 pr-12 text-[12px] area-ttd">
           <div className="text-center relative">
             <p className="mb-2">Mengetahui,</p>
