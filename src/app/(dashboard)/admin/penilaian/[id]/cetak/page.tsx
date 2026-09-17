@@ -55,40 +55,38 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
         dangerouslySetInnerHTML={{
           __html: `
         @media print {
-          @page { size: landscape; margin: 0; } 
+          /* 🔴 1. PERBAIKAN: Berikan margin kertas 15mm. Ini akan berlaku di SETIAP halaman (1, 2, 3, dst) */
+          @page { size: landscape; margin: 15mm; } 
           
-          /* 🔴 2. HANCURKAN SEMUA BATASAN UKURAN (Force Flow) */
           html, body, main, div {
             height: auto !important;
             max-height: none !important;
             width: auto !important;
             max-width: none !important;
             overflow: visible !important;
-            display: block !important; /* Mematikan flexbox/grid yang bisa menahan page-break */
+            display: block !important;
           }
 
           body { 
             -webkit-print-color-adjust: exact; 
             print-color-adjust: exact; 
             background-color: white !important; 
-            margin: 0; 
           }
           
           .no-print, button { display: none !important; }
 
-          /* 🔴 3. Area cetak dilepas batasannya agar mengalir secara alami */
           #area-cetak { 
             position: static !important; 
             width: 100% !important; 
             max-width: none !important;
             min-height: 0 !important;
             height: auto !important;
-            padding: 10mm !important; 
+            /* 🔴 2. Hapus padding dari kotak, karena margin kertas (@page) sudah menanganinya */
+            padding: 0 !important; 
             margin: 0 !important; 
             box-shadow: none !important;
           }
 
-          /* 🔴 4. Aturan Tabel */
           table { page-break-inside: auto; width: 100% !important; }
           tr { page-break-inside: avoid; page-break-after: auto; }
           thead { display: table-header-group; }
@@ -100,9 +98,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
         }}
       />
 
-      {/* 🔴 5. Tambahkan print:max-w-none print:min-h-0 di area cetak utama */}
       <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:max-w-none print:min-h-0 print:h-auto print:shadow-none print:p-0 text-[11px] print:block">
-        
         <div className="flex justify-end mb-4 no-print">
           <PrintButton />
         </div>
@@ -169,11 +165,31 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
               <tr className="bg-gray-100 print:bg-transparent text-center font-bold align-middle h-12">
                 <th className="border border-black px-1 w-8">NO</th>
                 <th className="border border-black px-2 w-32">ASPEK PENILAIAN</th>
-                <th className="border border-black px-2">ISTIMEWA<br />90 - 100</th>
-                <th className="border border-black px-2">MEMUASKAN<br />75 – 89.99</th>
-                <th className="border border-black px-2">CUKUP<br />60 – 74.99</th>
-                <th className="border border-black px-2">BURUK<br />40 – 59.99</th>
-                <th className="border border-black px-2">BURUK SEKALI<br />&lt; 40</th>
+                <th className="border border-black px-2">
+                  ISTIMEWA
+                  <br />
+                  90 - 100
+                </th>
+                <th className="border border-black px-2">
+                  MEMUASKAN
+                  <br />
+                  75 – 89.99
+                </th>
+                <th className="border border-black px-2">
+                  CUKUP
+                  <br />
+                  60 – 74.99
+                </th>
+                <th className="border border-black px-2">
+                  BURUK
+                  <br />
+                  40 – 59.99
+                </th>
+                <th className="border border-black px-2">
+                  BURUK SEKALI
+                  <br />
+                  &lt; 40
+                </th>
                 <th className="border border-black px-1 w-12">NILAI</th>
               </tr>
             </thead>
@@ -205,7 +221,6 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
           </table>
         </div>
 
-        {/* Area Tanda Tangan dikunci agar tidak terpotong mandiri */}
         <div className="flex justify-end mt-12 pr-12 text-[12px] area-ttd">
           <div className="text-center relative">
             <p className="mb-2">Mengetahui,</p>
@@ -217,7 +232,6 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             <p>NIP. 197703122009011007</p>
           </div>
         </div>
-
       </div>
     </div>
   );
