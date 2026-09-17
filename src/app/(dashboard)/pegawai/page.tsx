@@ -1,145 +1,242 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FormPresensi from "@/components/FormPresensi";
 import { checkDateStatus, getWitaDate } from "@/lib/utils";
 import { getPresensiByDate } from "@/lib/actions/presensi";
 
 type PastData = {
   status_verifikasi: string;
-  status_kehadiran: string; // 🔴 1. Ditambahkan ke dalam definisi tipe
+  status_kehadiran: string;
   uraian_aktivitas: string;
   kendala: string | null;
   lampiran: string[] | null;
 };
 
+const isSameDay = (d1: Date, d2: Date) => {
+  return d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+};
+
 export default function PegawaiDashboard() {
-  const [selectedDate, setSelectedDate] = useState<Date>(getWitaDate());
+  const today = getWitaDate();
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [currentMonthView, setCurrentMonthView] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
   const [pastData, setPastData] = useState<PastData | null>(null);
   const [isLoadingPast, setIsLoadingPast] = useState(false);
 
-  const today = getWitaDate();
-  const calendarDays = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - 3 + i);
-    return d;
-  });
-
   const status = checkDateStatus(selectedDate);
 
+  // 🔴 PERBAIKAN 1: Ekstrak fungsi tarik data agar bisa dipanggil saat form Sukses
+  const fetchPastData = useCallback(async () => {
+    setIsLoadingPast(true);
+    const dateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split("T")[0];
+    const response = await getPresensiByDate(dateStr);
+    setPastData(response.data as PastData);
+    setIsLoadingPast(false);
+  }, [selectedDate]);
+
+  // 🔴 PERBAIKAN 2: Cek database jika memilih HARI INI maupun MASA LALU
+  // 🔴 PERBAIKAN 2: Cek database jika memilih HARI INI maupun MASA LALU
+  // Semuanya dibungkus dalam setTimeout agar 100% aman dari Linter React
   useEffect(() => {
-    if (status === "PAST") {
-      const timer = setTimeout(() => {
-        setIsLoadingPast(true);
-
-        const fetchPastData = async () => {
-          const dateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split("T")[0];
-
-          const response = await getPresensiByDate(dateStr);
-          setPastData(response.data as PastData);
-          setIsLoadingPast(false);
-        };
-
+    const timer = setTimeout(() => {
+      if (status === "PAST" || status === "TODAY") {
         fetchPastData();
-      }, 0);
+      } else {
+        setPastData(null);
+      }
+    }, 0);
 
-      return () => clearTimeout(timer);
-    }
-  }, [selectedDate, status]);
+    return () => clearTimeout(timer);
+  }, [selectedDate, status, fetchPastData]);
+
+  const nextMonth = () => setCurrentMonthView(new Date(currentMonthView.getFullYear(), currentMonthView.getMonth() + 1, 1));
+  const prevMonth = () => setCurrentMonthView(new Date(currentMonthView.getFullYear(), currentMonthView.getMonth() - 1, 1));
+  const goToToday = () => {
+    setCurrentMonthView(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(today);
+  };
+
+  const daysInMonth = new Date(currentMonthView.getFullYear(), currentMonthView.getMonth() + 1, 0).getDate();
+  const startDayOfMonth = new Date(currentMonthView.getFullYear(), currentMonthView.getMonth(), 1).getDay();
+
+  const calendarGrid = [];
+  for (let i = 0; i < startDayOfMonth; i++) calendarGrid.push(null);
+  for (let i = 1; i <= daysInMonth; i++) calendarGrid.push(new Date(currentMonthView.getFullYear(), currentMonthView.getMonth(), i));
+  const namaHari = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Presensi Harian</h2>
-        <p className="text-gray-500 text-sm">Pilih tanggal untuk melihat atau mengisi presensi.</p>
+    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-[#003366] tracking-tight">Presensi Harian</h2>
+          <p className="text-gray-500 text-sm mt-1">Pilih tanggal pada kalender untuk melihat atau mengisi presensi.</p>
+        </div>
+        <button onClick={goToToday} className="bg-blue-50 text-[#003366] px-4 py-2 rounded-lg text-sm font-bold border border-blue-100 hover:bg-[#003366] hover:text-white transition-colors shadow-sm">
+          📅 Ke Hari Ini
+        </button>
       </div>
 
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto">
-        {calendarDays.map((date, idx) => {
-          const isSelected = date.getDate() === selectedDate.getDate();
-          const dayStatus = checkDateStatus(date);
-
-          return (
-            <button
-              key={idx}
-              onClick={() => setSelectedDate(date)}
-              className={`flex flex-col items-center justify-center min-w-[60px] p-3 rounded-lg border transition-all ${isSelected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
-            >
-              <span className="text-xs uppercase">{date.toLocaleDateString("id-ID", { weekday: "short" })}</span>
-              <span className="text-xl font-bold">{date.getDate()}</span>
-              <span className="text-[10px] mt-1 font-medium">{dayStatus === "TODAY" ? "Hari Ini" : dayStatus === "FUTURE" ? "Terkunci" : "Riwayat"}</span>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+        <div className="md:col-span-5 lg:col-span-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 h-fit">
+          <div className="flex items-center justify-between mb-6">
+            <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-6">
-        {status === "TODAY" && <FormPresensi />}
-
-        {status === "FUTURE" && (
-          <div className="rounded-lg bg-gray-50 p-8 border border-gray-200 text-center text-gray-500">
-            <span className="text-2xl block mb-2">🔒</span>
-            Presensi untuk tanggal ini belum dapat diisi.
+            <h3 className="font-bold text-[#003366] uppercase tracking-wider text-sm">{currentMonthView.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</h3>
+            <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
-        )}
 
-        {status === "PAST" && (
-          <div className="rounded-xl bg-white p-6 border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-800 border-b pb-3 mb-4">Riwayat: {selectedDate.toLocaleDateString("id-ID", { dateStyle: "full" })}</h3>
-
-            {isLoadingPast ? (
-              <p className="text-center text-gray-500 py-4 animate-pulse">Memuat data...</p>
-            ) : pastData ? (
-              <div className="space-y-4">
-                
-                {/* 🔴 2. Area Status Persetujuan dan Kehadiran Bersebelahan */}
-                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">Status Persetujuan</p>
-                    <span
-                      className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                        pastData.status_verifikasi === "PENDING"
-                          ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                          : pastData.status_verifikasi === "DISETUJUI"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                      }`}
-                    >
-                      {pastData.status_verifikasi}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">Keterangan Kehadiran</p>
-                    <p className="mt-1 font-bold text-blue-700 uppercase">
-                      {pastData.status_kehadiran || "Hadir"}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Uraian Aktivitas</p>
-                  <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-md border border-gray-100">{pastData.uraian_aktivitas}</p>
-                </div>
-                
-                {pastData.kendala && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Kendala</p>
-                    <p className="mt-1 text-gray-900 bg-red-50 p-3 rounded-md border border-red-100">{pastData.kendala}</p>
-                  </div>
-                )}
-                
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Lampiran</p>
-                  <p className="text-sm mt-1 text-blue-600 font-medium">🔒 {pastData.lampiran?.length || 0} File Tersimpan Aman (Private Store)</p>
-                </div>
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {namaHari.map((hari, i) => (
+              <div key={i} className="text-[11px] font-black text-gray-400 py-1 uppercase">
+                {hari}
               </div>
-            ) : (
-              <div className="text-center py-6 bg-red-50 rounded-lg border border-red-100">
-                <p className="text-red-600 font-medium">Anda tercatat Alfa (Tidak Mengisi Presensi) pada hari ini.</p>
-              </div>
-            )}
+            ))}
           </div>
-        )}
+          <div className="grid grid-cols-7 gap-1">
+            {calendarGrid.map((date, index) => {
+              if (!date) return <div key={index} className="p-2"></div>;
+
+              const isSelected = isSameDay(date, selectedDate);
+              const isToday = isSameDay(date, today);
+              const dayStat = checkDateStatus(date);
+
+              let btnClass = "h-10 w-full rounded-lg text-sm font-bold transition-all duration-200 flex items-center justify-center ";
+
+              if (isSelected) btnClass += "bg-[#003366] text-white shadow-md transform scale-105";
+              else if (isToday) btnClass += "bg-blue-50 text-[#003366] border border-blue-200 hover:bg-blue-100";
+              else if (dayStat === "FUTURE") btnClass += "text-gray-300 hover:bg-gray-50 cursor-not-allowed";
+              else btnClass += "text-gray-600 hover:bg-gray-100";
+
+              return (
+                <button key={index} onClick={() => setSelectedDate(date)} className={btnClass}>
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="md:col-span-7 lg:col-span-8">
+          {/* TAMPILAN LOADING */}
+          {isLoadingPast ? (
+            <div className="flex flex-col items-center justify-center py-20 text-[#003366] bg-white rounded-2xl shadow-sm border border-gray-100 h-full min-h-[350px]">
+              <svg className="animate-spin h-10 w-10 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p className="text-sm font-bold animate-pulse">Memeriksa Database...</p>
+            </div>
+          ) : (
+            <>
+              {/* 🔴 PERBAIKAN 3: Jika HARI INI dan BELUM ADA DATA -> Tampilkan Form */}
+              {status === "TODAY" && !pastData && <FormPresensi onSuccess={fetchPastData} />}
+
+              {/* 🔴 PERBAIKAN 4: Jika ADA DATA (Baik Hari Ini maupun Masa Lalu) -> Tampilkan Bukti */}
+              {pastData && (status === "TODAY" || status === "PAST") && (
+                <div className="rounded-2xl bg-white p-6 sm:p-8 border border-gray-100 shadow-sm animate-fade-in-up">
+                  <div className="border-b border-gray-100 pb-5 mb-6">
+                    {status === "TODAY" ? (
+                      <div className="flex items-center gap-3">
+                        <div className="bg-green-100 text-green-600 p-2 rounded-full">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">Selesai Presensi</h3>
+                          <p className="text-sm text-gray-500 font-medium">Anda sudah mengirimkan laporan kinerja hari ini.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <h3 className="text-xl font-bold text-[#003366]">Rekap Presensi Harian</h3>
+                        <p className="text-sm text-gray-500 mt-1 font-medium">{selectedDate.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-5 rounded-xl border border-gray-100">
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Persetujuan Atasan</p>
+                        <span
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold border ${
+                            pastData.status_verifikasi === "PENDING"
+                              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                              : pastData.status_verifikasi === "DISETUJUI"
+                                ? "bg-green-100 text-green-800 border-green-200"
+                                : "bg-red-100 text-red-800 border-red-200"
+                          }`}
+                        >
+                          {pastData.status_verifikasi}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Kehadiran</p>
+                        <p className="font-black text-[#003366] text-lg uppercase tracking-wide">{pastData.status_kehadiran || "Hadir"}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-bold text-gray-700 mb-2">Uraian Aktivitas Pekerjaan</p>
+                      <div className="bg-white text-gray-700 p-4 rounded-xl border border-gray-200 leading-relaxed text-sm shadow-inner">{pastData.uraian_aktivitas}</div>
+                    </div>
+
+                    {pastData.kendala && (
+                      <div>
+                        <p className="text-sm font-bold text-gray-700 mb-2">Kendala yang Dialami</p>
+                        <div className="bg-red-50 text-red-900 p-4 rounded-xl border border-red-100 leading-relaxed text-sm">{pastData.kendala}</div>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-2 text-sm text-[#003366] bg-blue-50/50 p-3 rounded-xl border border-blue-100 w-fit">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span className="font-bold">{pastData.lampiran?.length || 0} Berkas Digital (Tersimpan Aman)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* JIKA MASA LALU TAPI KOSONG (ALFA) */}
+              {status === "PAST" && !pastData && (
+                <div className="text-center py-16 bg-red-50 rounded-2xl border border-red-100 shadow-sm animate-fade-in-up">
+                  <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 shadow-sm">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <h4 className="text-red-800 font-bold text-xl mb-2">Tidak Ada Presensi</h4>
+                  <p className="text-red-600 text-sm font-medium">Anda tercatat Alfa (Mangkir) pada tanggal ini.</p>
+                </div>
+              )}
+
+              {/* JIKA MEMILIH HARI ESOK */}
+              {status === "FUTURE" && (
+                <div className="rounded-2xl bg-gray-50 p-10 border border-gray-200 text-center text-gray-500 animate-fade-in-up flex flex-col items-center justify-center h-full min-h-[350px] shadow-sm">
+                  <div className="bg-gray-200 p-5 rounded-full mb-5 shadow-inner">
+                    <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-black text-gray-700 text-xl tracking-tight">Tanggal Terkunci</h3>
+                  <p className="text-sm mt-2 max-w-xs font-medium text-gray-400">Anda tidak dapat mengisi presensi untuk hari di masa depan.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

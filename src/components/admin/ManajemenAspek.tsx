@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { tambahAspek, hapusAspek, updateAspek } from "@/lib/actions/aspek"; // 🔴 Import updateAspek
+import { tambahAspek, hapusAspek, updateAspek } from "@/lib/actions/aspek";
 import { useRouter } from "next/navigation";
 
-type RubrikProps = {
+export type RubrikProps = {
   id: number;
   nama_aspek: string;
   istimewa: string;
@@ -26,8 +26,6 @@ const INITIAL_FORM_DATA = {
 export default function ManajemenAspek({ initialData }: { initialData: RubrikProps[] }) {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [isLoading, setIsLoading] = useState(false);
-
-  // 🔴 STATE BARU UNTUK MODE EDIT
   const [editingId, setEditingId] = useState<number | null>(null);
   const router = useRouter();
 
@@ -35,7 +33,6 @@ export default function ManajemenAspek({ initialData }: { initialData: RubrikPro
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 🔴 Fungsi saat tombol Edit di tabel diklik
   const handleKlikEdit = (item: RubrikProps) => {
     setEditingId(item.id);
     setFormData({
@@ -46,17 +43,14 @@ export default function ManajemenAspek({ initialData }: { initialData: RubrikPro
       buruk: item.buruk,
       sangat_buruk: item.sangat_buruk,
     });
-    // Scroll otomatis ke atas (ke arah form)
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 🔴 Fungsi untuk membatalkan mode edit
   const handleBatalEdit = () => {
     setEditingId(null);
     setFormData(INITIAL_FORM_DATA);
   };
 
-  // 🔴 Fungsi Submit sekarang memiliki 2 cabang: Tambah atau Update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -64,16 +58,14 @@ export default function ManajemenAspek({ initialData }: { initialData: RubrikPro
     try {
       let res;
       if (editingId) {
-        // Mode Update
         res = await updateAspek(editingId, formData);
       } else {
-        // Mode Tambah Baru
         res = await tambahAspek(formData);
       }
 
       if (res.success) {
         setFormData(INITIAL_FORM_DATA);
-        setEditingId(null); // Keluar dari mode edit setelah sukses
+        setEditingId(null);
         router.refresh();
       } else {
         alert(res.message);
@@ -86,33 +78,57 @@ export default function ManajemenAspek({ initialData }: { initialData: RubrikPro
   };
 
   const handleHapus = async (id: number, namaAspek: string) => {
-    if (!window.confirm(`Yakin ingin menghapus rubrik "${namaAspek}"?`)) return;
+    if (!window.confirm(`Perhatian: Yakin ingin menghapus aspek "${namaAspek}"?\nTindakan ini tidak dapat dibatalkan.`)) return;
+    setIsLoading(true);
     try {
       const res = await hapusAspek(id);
       if (res.success) {
-        if (editingId === id) handleBatalEdit(); // Jika yg dihapus sedang diedit, reset form
+        if (editingId === id) handleBatalEdit();
         router.refresh();
       } else {
         alert(res.message);
       }
     } catch (error) {
       alert("Gagal menghapus data.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="space-y-8 mt-6">
-      {/* FORM INPUT & EDIT RUBRIK */}
-      <div className={`p-6 rounded-xl border shadow-sm transition-colors ${editingId ? "bg-yellow-50 border-yellow-300" : "bg-white border-gray-200"}`}>
-        <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
-          <h3 className={`font-bold ${editingId ? "text-yellow-800" : "text-gray-800"}`}>{editingId ? "✏️ Edit Aspek & Rubrik Penilaian" : "Tambah Aspek & Rubrik Penilaian Baru"}</h3>
-          {editingId && <span className="text-xs font-semibold bg-yellow-200 text-yellow-800 px-2 py-1 rounded">Mode Edit Aktif</span>}
+      {/* KARTU FORM INPUT & EDIT */}
+      <div className={`p-6 sm:p-8 rounded-2xl border shadow-sm transition-all duration-300 ${editingId ? "bg-yellow-50/50 border-yellow-300 ring-4 ring-yellow-50" : "bg-white border-gray-100"}`}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-gray-100 pb-4 gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-lg text-white font-bold shadow-sm ${editingId ? "bg-yellow-500" : "bg-[#003366]"}`}>
+              {editingId ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <h3 className={`text-xl font-black tracking-tight ${editingId ? "text-yellow-800" : "text-[#003366]"}`}>{editingId ? "Edit Parameter Rubrik" : "Tambah Aspek Baru"}</h3>
+              <p className="text-sm font-medium text-gray-500 mt-0.5">Lengkapi kriteria penilaian dari tertinggi hingga terendah.</p>
+            </div>
+          </div>
+
+          {editingId && (
+            <span className="flex items-center gap-1.5 text-xs font-bold bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded-full animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-yellow-600"></span> Mode Edit Aktif
+            </span>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">
-              Nama Aspek Penilaian <span className="text-red-500">*</span>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">
+              Judul Aspek Penilaian <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -120,90 +136,175 @@ export default function ManajemenAspek({ initialData }: { initialData: RubrikPro
               required
               value={formData.nama_aspek}
               onChange={handleInputChange}
-              placeholder="Contoh: Kualitas Kerja"
-              className="w-full rounded-md border-gray-300 border p-2 text-sm focus:border-blue-500 bg-white"
+              placeholder="Contoh: Kualitas Kerja / Kedisiplinan / Tanggung Jawab"
+              className="w-full rounded-xl border-gray-300 border px-4 py-3 text-sm text-gray-900 font-medium focus:border-[#003366] focus:ring-[#003366] bg-white shadow-sm transition-all outline-none"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-green-600 mb-1">Istimewa (90-100)</label>
-              <textarea name="istimewa" required rows={3} value={formData.istimewa} onChange={handleInputChange} className="w-full rounded-md border-green-200 bg-green-50 border p-2 text-xs" />
+              <label className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-2">
+                Istimewa <br />
+                <span className="text-[10px] font-medium text-green-600">(90-100)</span>
+              </label>
+              <textarea
+                name="istimewa"
+                required
+                rows={4}
+                value={formData.istimewa}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border-green-200 bg-green-50/50 focus:bg-white focus:border-green-400 focus:ring-green-400 border p-3 text-xs font-medium text-gray-700 outline-none transition-all shadow-inner placeholder-green-200"
+                placeholder="Kriteria sangat melampaui standar..."
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-blue-600 mb-1">Memuaskan (75-89.99)</label>
-              <textarea name="memuaskan" required rows={3} value={formData.memuaskan} onChange={handleInputChange} className="w-full rounded-md border-blue-200 bg-blue-50 border p-2 text-xs" />
+              <label className="block text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">
+                Memuaskan <br />
+                <span className="text-[10px] font-medium text-blue-600">(75-89.99)</span>
+              </label>
+              <textarea
+                name="memuaskan"
+                required
+                rows={4}
+                value={formData.memuaskan}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border-blue-200 bg-blue-50/50 focus:bg-white focus:border-blue-400 focus:ring-blue-400 border p-3 text-xs font-medium text-gray-700 outline-none transition-all shadow-inner placeholder-blue-200"
+                placeholder="Kriteria melampaui standar..."
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-yellow-600 mb-1">Cukup (60-74.99)</label>
-              <textarea name="cukup" required rows={3} value={formData.cukup} onChange={handleInputChange} className="w-full rounded-md border-yellow-200 bg-yellow-50 border p-2 text-xs" />
+              <label className="block text-xs font-bold text-yellow-700 uppercase tracking-wider mb-2">
+                Cukup <br />
+                <span className="text-[10px] font-medium text-yellow-600">(60-74.99)</span>
+              </label>
+              <textarea
+                name="cukup"
+                required
+                rows={4}
+                value={formData.cukup}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border-yellow-200 bg-yellow-50/50 focus:bg-white focus:border-yellow-400 focus:ring-yellow-400 border p-3 text-xs font-medium text-gray-700 outline-none transition-all shadow-inner placeholder-yellow-200"
+                placeholder="Kriteria sesuai standar minimum..."
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-orange-600 mb-1">Buruk (40-59.99)</label>
-              <textarea name="buruk" required rows={3} value={formData.buruk} onChange={handleInputChange} className="w-full rounded-md border-orange-200 bg-orange-50 border p-2 text-xs" />
+              <label className="block text-xs font-bold text-orange-700 uppercase tracking-wider mb-2">
+                Buruk <br />
+                <span className="text-[10px] font-medium text-orange-600">(40-59.99)</span>
+              </label>
+              <textarea
+                name="buruk"
+                required
+                rows={4}
+                value={formData.buruk}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border-orange-200 bg-orange-50/50 focus:bg-white focus:border-orange-400 focus:ring-orange-400 border p-3 text-xs font-medium text-gray-700 outline-none transition-all shadow-inner placeholder-orange-200"
+                placeholder="Kriteria di bawah standar..."
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-red-600 mb-1">Buruk Sekali (&lt; 40)</label>
-              <textarea name="sangat_buruk" required rows={3} value={formData.sangat_buruk} onChange={handleInputChange} className="w-full rounded-md border-red-200 bg-red-50 border p-2 text-xs" />
+              <label className="block text-xs font-bold text-red-700 uppercase tracking-wider mb-2">
+                Buruk Sekali <br />
+                <span className="text-[10px] font-medium text-red-600">(&lt; 40)</span>
+              </label>
+              <textarea
+                name="sangat_buruk"
+                required
+                rows={4}
+                value={formData.sangat_buruk}
+                onChange={handleInputChange}
+                className="w-full rounded-xl border-red-200 bg-red-50/50 focus:bg-white focus:border-red-400 focus:ring-red-400 border p-3 text-xs font-medium text-gray-700 outline-none transition-all shadow-inner placeholder-red-200"
+                placeholder="Kriteria tidak dapat diterima..."
+              />
             </div>
           </div>
 
-          <div className="flex justify-end pt-2 gap-3">
-            {/* Tombol Batal Edit (Hanya muncul saat mode edit) */}
+          <div className="flex justify-end pt-4 gap-3 border-t border-gray-100">
             {editingId && (
-              <button type="button" onClick={handleBatalEdit} disabled={isLoading} className="px-6 py-2 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 transition">
-                Batal
+              <button type="button" onClick={handleBatalEdit} disabled={isLoading} className="px-6 py-2.5 rounded-lg text-sm font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
+                Batal Edit
               </button>
             )}
-            <button type="submit" disabled={isLoading} className={`${editingId ? "bg-yellow-600 hover:bg-yellow-700" : "bg-blue-600 hover:bg-blue-700"} text-white px-6 py-2 rounded-md text-sm font-medium transition disabled:bg-gray-400`}>
-              {isLoading ? "Menyimpan..." : editingId ? "Update Rubrik" : "Simpan Rubrik"}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`px-6 py-2.5 rounded-lg text-sm font-bold text-white shadow-md transition-all transform hover:-translate-y-0.5 disabled:bg-gray-400 disabled:transform-none ${editingId ? "bg-yellow-600 hover:bg-yellow-700 shadow-yellow-600/30" : "bg-[#003366] hover:bg-[#002244] shadow-blue-900/30"}`}
+            >
+              {isLoading ? "Menyimpan Data..." : editingId ? "Update Rubrik" : "Simpan Aspek Baru"}
             </button>
           </div>
         </form>
       </div>
 
-      {/* TABEL DAFTAR RUBRIK */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b bg-gray-50">
-          <h3 className="font-bold text-gray-800">Daftar Aspek & Rubrik Penilaian</h3>
-        </div>
+      {/* DAFTAR TABEL RUBRIK */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600 min-w-[1000px]">
-            <thead className="bg-white border-b border-gray-100 text-gray-700 text-xs text-center">
+          <table className="w-full text-left text-sm text-gray-600 min-w-[1100px] border-collapse">
+            <thead className="bg-[#003366]/5 border-b border-gray-200 text-[#003366]">
               <tr>
-                <th className="px-4 py-3 font-bold w-48 text-left">Aspek Penilaian</th>
-                <th className="px-4 py-3 font-semibold bg-green-50">Istimewa</th>
-                <th className="px-4 py-3 font-semibold bg-blue-50">Memuaskan</th>
-                <th className="px-4 py-3 font-semibold bg-yellow-50">Cukup</th>
-                <th className="px-4 py-3 font-semibold bg-orange-50">Buruk</th>
-                <th className="px-4 py-3 font-semibold bg-red-50">Buruk Sekali</th>
-                <th className="px-4 py-3 font-semibold w-24">Aksi</th>
+                <th className="px-5 py-4 font-bold uppercase tracking-wider text-[11px] w-48">Aspek Penilaian</th>
+                <th className="px-3 py-4 font-bold uppercase tracking-wider text-[11px] text-green-700">Istimewa</th>
+                <th className="px-3 py-4 font-bold uppercase tracking-wider text-[11px] text-blue-700">Memuaskan</th>
+                <th className="px-3 py-4 font-bold uppercase tracking-wider text-[11px] text-yellow-700">Cukup</th>
+                <th className="px-3 py-4 font-bold uppercase tracking-wider text-[11px] text-orange-700">Buruk</th>
+                <th className="px-3 py-4 font-bold uppercase tracking-wider text-[11px] text-red-700">Buruk Sekali</th>
+                <th className="px-5 py-4 font-bold uppercase tracking-wider text-[11px] text-center w-28">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 align-top">
               {initialData.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    Belum ada data rubrik penilaian.
+                  <td colSpan={7} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="bg-gray-100 p-4 rounded-full mb-3 text-gray-400">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500 font-bold text-base">Belum ada aspek yang ditambahkan.</p>
+                      <p className="text-gray-400 text-sm mt-1">Gunakan formulir di atas untuk membuat rubrik baru.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 initialData.map((item) => (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${editingId === item.id ? "bg-yellow-50" : ""}`}>
-                    <td className="px-4 py-3 font-bold text-gray-900">{item.nama_aspek}</td>
-                    <td className="px-4 py-3 text-xs whitespace-pre-wrap">{item.istimewa}</td>
-                    <td className="px-4 py-3 text-xs whitespace-pre-wrap">{item.memuaskan}</td>
-                    <td className="px-4 py-3 text-xs whitespace-pre-wrap">{item.cukup}</td>
-                    <td className="px-4 py-3 text-xs whitespace-pre-wrap">{item.buruk}</td>
-                    <td className="px-4 py-3 text-xs whitespace-pre-wrap">{item.sangat_buruk}</td>
-                    <td className="px-4 py-3 text-center space-y-2">
-                      {/* 🔴 Tombol EDIT ditambahkan */}
-                      <button onClick={() => handleKlikEdit(item)} className="block w-full text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition border border-blue-200">
-                        Edit
-                      </button>
-                      <button onClick={() => handleHapus(item.id, item.nama_aspek)} className="block w-full text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-200">
-                        Hapus
-                      </button>
+                  <tr key={item.id} className={`transition-colors group ${editingId === item.id ? "bg-yellow-50/50" : "hover:bg-blue-50/30"}`}>
+                    <td className="px-5 py-4">
+                      <p className={`font-black text-sm ${editingId === item.id ? "text-yellow-800" : "text-gray-900"}`}>{item.nama_aspek}</p>
+                    </td>
+                    <td className="px-3 py-4 text-[11px] font-medium text-gray-600 leading-relaxed whitespace-pre-wrap">{item.istimewa}</td>
+                    <td className="px-3 py-4 text-[11px] font-medium text-gray-600 leading-relaxed whitespace-pre-wrap">{item.memuaskan}</td>
+                    <td className="px-3 py-4 text-[11px] font-medium text-gray-600 leading-relaxed whitespace-pre-wrap">{item.cukup}</td>
+                    <td className="px-3 py-4 text-[11px] font-medium text-gray-600 leading-relaxed whitespace-pre-wrap">{item.buruk}</td>
+                    <td className="px-3 py-4 text-[11px] font-medium text-gray-600 leading-relaxed whitespace-pre-wrap">{item.sangat_buruk}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => handleKlikEdit(item)}
+                          disabled={isLoading}
+                          className="flex justify-center items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg transition-all border border-blue-200"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleHapus(item.id, item.nama_aspek)}
+                          disabled={isLoading}
+                          className="flex justify-center items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-600 hover:text-white px-3 py-2 rounded-lg transition-all border border-red-200"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
