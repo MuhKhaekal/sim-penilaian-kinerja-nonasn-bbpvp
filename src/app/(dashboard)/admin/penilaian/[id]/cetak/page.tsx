@@ -99,6 +99,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
       />
 
       <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:max-w-none print:min-h-0 print:h-auto print:shadow-none print:p-0 text-[11px] print:block">
+        
         <div className="flex justify-end mb-4 no-print">
           <PrintButton />
         </div>
@@ -165,31 +166,11 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
               <tr className="bg-gray-100 print:bg-transparent text-center font-bold align-middle h-12">
                 <th className="border border-black px-1 w-8">NO</th>
                 <th className="border border-black px-2 w-32">ASPEK PENILAIAN</th>
-                <th className="border border-black px-2">
-                  ISTIMEWA
-                  <br />
-                  90 - 100
-                </th>
-                <th className="border border-black px-2">
-                  MEMUASKAN
-                  <br />
-                  75 – 89.99
-                </th>
-                <th className="border border-black px-2">
-                  CUKUP
-                  <br />
-                  60 – 74.99
-                </th>
-                <th className="border border-black px-2">
-                  BURUK
-                  <br />
-                  40 – 59.99
-                </th>
-                <th className="border border-black px-2">
-                  BURUK SEKALI
-                  <br />
-                  &lt; 40
-                </th>
+                <th className="border border-black px-2">ISTIMEWA<br />90 - 100</th>
+                <th className="border border-black px-2">MEMUASKAN<br />75 – 89.99</th>
+                <th className="border border-black px-2">CUKUP<br />60 – 74.99</th>
+                <th className="border border-black px-2">BURUK<br />40 – 59.99</th>
+                <th className="border border-black px-2">BURUK SEKALI<br />&lt; 40</th>
                 <th className="border border-black px-1 w-12">NILAI</th>
               </tr>
             </thead>
@@ -232,6 +213,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             <p>NIP. 197703122009011007</p>
           </div>
         </div>
+
       </div>
     </div>
   );
