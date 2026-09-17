@@ -44,18 +44,10 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
 
   const detailNilai: Record<string, string> = evaluasi.detail_nilai || {};
 
-  // 🔴 PERBAIKAN 2: Mengambil nilai kehadiran (Jika belum ada di DB, otomatis jadi "0")
   const sakit = detailNilai["sakit"] || "0";
   const izin = detailNilai["izin"] || "0";
   const terlambat = detailNilai["terlambat"] || "0";
   const alfa = detailNilai["alfa"] || "0";
-
-  const today = getWitaDate();
-  const tanggalCetak = today.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 
   return (
     <div className="bg-gray-200 min-h-screen py-10 print:py-0 print:bg-white text-black">
@@ -63,22 +55,51 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
         dangerouslySetInnerHTML={{
           __html: `
         @media print {
-          /* 🔴 PERBAIKAN 1: Margin 0 akan MEMAKSA browser menyembunyikan URL dan Tanggal bawaan! */
+          /* 1. Hilangkan margin bawaan untuk membuang URL/Tanggal browser */
           @page { size: landscape; margin: 0; } 
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white !important; margin: 0; }
           
-          body * { visibility: hidden; }
-          #area-cetak, #area-cetak * { visibility: visible; }
+          /* 2. Bebaskan semua pembatasan tinggi dari layout parent (seperti h-screen) */
+          html, body, main, div {
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          body { 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+            background-color: white !important; 
+            margin: 0; 
+          }
           
-          /* Karena margin kertas 0, kita beri padding agar teks tidak menabrak ujung kertas */
-          #area-cetak { position: absolute; left: 0; top: 0; width: 100vw; padding: 15mm !important; margin: 0 !important; }
+          /* Sembunyikan elemen yang tidak perlu (tanpa merusak flow) */
+          .no-print, button { display: none !important; }
+
+          /* 3. KUNCI UTAMA: Kembalikan posisi ke STATIC (Bukan Absolute) agar bisa multi-halaman */
+          #area-cetak { 
+            position: static !important; 
+            width: 100% !important; 
+            padding: 15mm !important; 
+            margin: 0 !important; 
+            box-shadow: none !important;
+          }
+
+          /* 4. ATURAN CERDAS UNTUK TABEL MULTI-HALAMAN */
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; } /* Baris tidak boleh terpotong di tengah */
+          thead { display: table-header-group; } /* Mengulang Header Tabel di halaman ke-2, ke-3, dst */
+          tfoot { display: table-footer-group; }
+          
+          /* Memaksa elemen Tanda Tangan tidak terpisah dari tabel jika ruang tidak cukup */
+          .area-ttd { page-break-inside: avoid; }
         }
       `,
         }}
       />
 
-      <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:shadow-none print:p-0 relative text-[11px]">
-        <div className="absolute top-4 right-4 print:hidden">
+      {/* Kontainer Utama Cetak */}
+      <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:shadow-none print:p-0 text-[11px]">
+        
+        <div className="flex justify-end mb-4 no-print">
           <PrintButton />
         </div>
 
@@ -118,7 +139,6 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             <span className="w-40 mt-1">KEHADIRAN PEGAWAI</span>
             <span className="mt-1">:</span>
             <div className="flex-1 grid grid-cols-4 gap-4 text-center ml-4">
-              {/* 🔴 Titik-titik diganti dengan variabel angka yang sesungguhnya */}
               <div>
                 <p>SAKIT</p>
                 <p className="mt-2 font-normal text-[10px]">{sakit} HARI/PERIODE</p>
@@ -145,31 +165,11 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
               <tr className="bg-gray-100 print:bg-transparent text-center font-bold align-middle h-12">
                 <th className="border border-black px-1 w-8">NO</th>
                 <th className="border border-black px-2 w-32">ASPEK PENILAIAN</th>
-                <th className="border border-black px-2">
-                  ISTIMEWA
-                  <br />
-                  90 - 100
-                </th>
-                <th className="border border-black px-2">
-                  MEMUASKAN
-                  <br />
-                  75 – 89.99
-                </th>
-                <th className="border border-black px-2">
-                  CUKUP
-                  <br />
-                  60 – 74.99
-                </th>
-                <th className="border border-black px-2">
-                  BURUK
-                  <br />
-                  40 – 59.99
-                </th>
-                <th className="border border-black px-2">
-                  BURUK SEKALI
-                  <br />
-                  &lt; 40
-                </th>
+                <th className="border border-black px-2">ISTIMEWA<br />90 - 100</th>
+                <th className="border border-black px-2">MEMUASKAN<br />75 – 89.99</th>
+                <th className="border border-black px-2">CUKUP<br />60 – 74.99</th>
+                <th className="border border-black px-2">BURUK<br />40 – 59.99</th>
+                <th className="border border-black px-2">BURUK SEKALI<br />&lt; 40</th>
                 <th className="border border-black px-1 w-12">NILAI</th>
               </tr>
             </thead>
@@ -201,7 +201,8 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
           </table>
         </div>
 
-        <div className="flex justify-end mt-12 pr-12 text-[12px]">
+        {/* Area Tanda Tangan dikunci dengan class 'area-ttd' agar tidak terpisah sendirian ke halaman baru jika terpotong */}
+        <div className="flex justify-end mt-12 pr-12 text-[12px] area-ttd">
           <div className="text-center relative">
             <p className="mb-2">Mengetahui,</p>
             <p>Kepala Bagian BBPVP Makassar</p>
@@ -212,6 +213,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             <p>NIP. 197703122009011007</p>
           </div>
         </div>
+
       </div>
     </div>
   );
