@@ -1,10 +1,10 @@
 import { getDetailPegawaiDanEvaluasi } from "@/lib/actions/penilaian";
 import { getDaftarAspek } from "@/lib/actions/aspek";
 import PrintButton from "@/components/admin/PrintButton";
-import { getWitaDate } from "@/lib/utils";
 import { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
 type RubrikT = {
   id: number;
   nama_aspek: string;
@@ -30,6 +30,7 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
 export default async function CetakPenilaianPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ bulan: string; tahun: string }> }) {
   const { id: user_id } = await params;
   const { bulan, tahun } = await searchParams;
+
   const numBulan = parseInt(bulan);
   const numTahun = parseInt(tahun);
 
@@ -50,56 +51,41 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
   const alfa = detailNilai["alfa"] || "0";
 
   return (
+    // 🔴 1. print:min-h-0 print:h-auto mematikan paksaan 1 halaman dari browser
     <div className="bg-gray-200 min-h-screen py-10 print:min-h-0 print:h-auto print:py-0 print:bg-white text-black print:block">
       <style
         dangerouslySetInnerHTML={{
           __html: `
         @media print {
-          /* 🔴 1. PERBAIKAN: Berikan margin kertas 15mm. Ini akan berlaku di SETIAP halaman (1, 2, 3, dst) */
-          @page { size: landscape; margin: 15mm; } 
+          /* 🔴 2. Margin 15mm dikembalikan agar halaman 2 dkk tidak mepet ke atas */
+          @page { 
+            size: landscape; 
+            margin: 15mm; 
+          } 
           
-          html, body, main, div {
-            height: auto !important;
-            max-height: none !important;
-            width: auto !important;
-            max-width: none !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-
           body { 
             -webkit-print-color-adjust: exact; 
             print-color-adjust: exact; 
             background-color: white !important; 
           }
           
-          .no-print, button { display: none !important; }
+          .no-print { display: none !important; }
 
-          #area-cetak { 
-            position: static !important; 
-            width: 100% !important; 
-            max-width: none !important;
-            min-height: 0 !important;
-            height: auto !important;
-            /* 🔴 2. Hapus padding dari kotak, karena margin kertas (@page) sudah menanganinya */
-            padding: 0 !important; 
-            margin: 0 !important; 
-            box-shadow: none !important;
-          }
-
-          table { page-break-inside: auto; width: 100% !important; }
+          /* 🔴 3. Aturan tabel agar bisa terpotong mulus dan header diulang */
+          table { page-break-inside: auto; width: 100% !important; border-collapse: collapse !important; }
           tr { page-break-inside: avoid; page-break-after: auto; }
           thead { display: table-header-group; }
           tfoot { display: table-footer-group; }
           
+          /* 🔴 4. Mencegah tanda tangan terpotong separuh kertas */
           .area-ttd { page-break-inside: avoid; }
         }
       `,
         }}
       />
 
+      {/* 🔴 5. Area cetak dilepaskan dari max-w dan min-h bawaan layar */}
       <div id="area-cetak" className="max-w-[29.7cm] min-h-[21cm] mx-auto bg-white p-[1.5cm] shadow-lg print:max-w-none print:min-h-0 print:h-auto print:shadow-none print:p-0 text-[11px] print:block">
-        
         <div className="flex justify-end mb-4 no-print">
           <PrintButton />
         </div>
@@ -108,7 +94,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
           <h3 className="text-lg font-bold uppercase underline">PENILAIAN KINERJA PEGAWAI NON PNS</h3>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-4 print:break-inside-avoid">
           <div className="grid grid-cols-2 gap-x-12 gap-y-2 font-semibold">
             <div>
               <div className="flex">
@@ -161,16 +147,36 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
         </div>
 
         <div className="mb-8 mt-6">
-          <table className="w-full border-collapse border border-black">
+          <table className="w-full border-collapse border border-black print:border-collapse">
             <thead>
               <tr className="bg-gray-100 print:bg-transparent text-center font-bold align-middle h-12">
                 <th className="border border-black px-1 w-8">NO</th>
                 <th className="border border-black px-2 w-32">ASPEK PENILAIAN</th>
-                <th className="border border-black px-2">ISTIMEWA<br />90 - 100</th>
-                <th className="border border-black px-2">MEMUASKAN<br />75 – 89.99</th>
-                <th className="border border-black px-2">CUKUP<br />60 – 74.99</th>
-                <th className="border border-black px-2">BURUK<br />40 – 59.99</th>
-                <th className="border border-black px-2">BURUK SEKALI<br />&lt; 40</th>
+                <th className="border border-black px-2">
+                  ISTIMEWA
+                  <br />
+                  90 - 100
+                </th>
+                <th className="border border-black px-2">
+                  MEMUASKAN
+                  <br />
+                  75 – 89.99
+                </th>
+                <th className="border border-black px-2">
+                  CUKUP
+                  <br />
+                  60 – 74.99
+                </th>
+                <th className="border border-black px-2">
+                  BURUK
+                  <br />
+                  40 – 59.99
+                </th>
+                <th className="border border-black px-2">
+                  BURUK SEKALI
+                  <br />
+                  &lt; 40
+                </th>
                 <th className="border border-black px-1 w-12">NILAI</th>
               </tr>
             </thead>
@@ -202,6 +208,7 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
           </table>
         </div>
 
+        {/* 🔴 TANDA TANGAN KEMBALI MENGGUNAKAN TAILWIND FLEXBOX */}
         <div className="flex justify-end mt-12 pr-12 text-[12px] area-ttd">
           <div className="text-center relative">
             <p className="mb-2">Mengetahui,</p>
@@ -213,7 +220,6 @@ export default async function CetakPenilaianPage({ params, searchParams }: { par
             <p>NIP. 197703122009011007</p>
           </div>
         </div>
-
       </div>
     </div>
   );
