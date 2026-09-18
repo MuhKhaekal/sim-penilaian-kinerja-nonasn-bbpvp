@@ -12,12 +12,15 @@ export async function simpanDataPresensi(formData: FormData) {
     return { success: false, message: "Akses ditolak." };
   }
 
+  // 🔴 1. SISTEM PENDETEKSI: Cegat di awal jika token benar-benar kosong di Vercel
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error("FATAL ERROR: BLOB_READ_WRITE_TOKEN kosong atau tidak terbaca oleh server!");
+    return { success: false, message: "Sistem gagal mengautentikasi penyimpanan berkas. Hubungi Admin." };
+  }
+
   try {
     const koordinat = formData.get("koordinat") as string;
-    
-    // 🔴 PERBAIKAN: Berikan nilai default "Hadir" agar tidak pernah null jika gagal terbaca
     const status_kehadiran = (formData.get("status_kehadiran") as string) || "Hadir";
-    
     const uraian = formData.get("uraian") as string;
     const kendala = formData.get("kendala") as string;
     const files = formData.getAll("lampiran") as File[];
@@ -27,8 +30,10 @@ export async function simpanDataPresensi(formData: FormData) {
     for (const file of files) {
       const fileName = `presensi-${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
       
+      // 🔴 2. SUNTIKAN EKSPLISIT: Paksa Vercel Blob menggunakan token dari Environment
       const blob = await put(fileName, file, { 
-        access: 'private', 
+        access: 'private',
+        token: process.env.BLOB_READ_WRITE_TOKEN // Injeksi manual di sini
       });
       
       lampiranUrls.push(blob.url);
@@ -54,7 +59,7 @@ export async function simpanDataPresensi(formData: FormData) {
     return { success: true };
   } catch (error) {
     console.error("Gagal simpan presensi ke DB atau Blob:", error);
-    return { success: false, message: "Terjadi kesalahan sistem saat memproses data." };
+    return { success: false, message: "Terjadi kesalahan sistem saat mengunggah berkas." };
   }
 }
 
