@@ -97,3 +97,23 @@ export async function getRiwayatBulanan(bulan: number, tahun: number) {
     return { success: false, data: [] };
   }
 }
+
+export async function getEvaluasiTahunan(tahun: number) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "PEGAWAI") return { success: false, data: [] };
+
+  try {
+    // 🔴 PERBAIKAN: Ubah nama tabel dari "evaluasi" menjadi "penilaian_kinerja" sesuai skema DB Anda
+    const { rows } = await sql`
+      SELECT bulan FROM penilaian_kinerja 
+      WHERE user_id = ${session.user.id} AND tahun = ${tahun}
+    `;
+    
+    // Mengembalikan array berisi angka bulan saja, contoh: [1, 2, 8]
+    const bulanDievaluasi = rows.map((row) => row.bulan);
+    return { success: true, data: bulanDievaluasi };
+  } catch (error) {
+    console.error("Gagal mengambil status evaluasi tahunan:", error);
+    return { success: false, data: [] };
+  }
+}

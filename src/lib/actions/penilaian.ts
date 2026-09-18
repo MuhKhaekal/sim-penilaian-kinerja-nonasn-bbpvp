@@ -38,7 +38,7 @@ export async function getRekapPegawaiBulanIni(bulan: number, tahun: number) {
 export async function getDetailAktivitas(user_id: string, bulan: number, tahun: number) {
   try {
     const { rows } = await sql`
-      SELECT id, tanggal, uraian_aktivitas, titik_koordinat, lampiran, status_kehadiran 
+      SELECT id, tanggal, uraian_aktivitas, kendala, titik_koordinat, lampiran, status_kehadiran 
       FROM presensi 
       WHERE user_id::text = ${user_id} 
         AND EXTRACT(MONTH FROM tanggal) = ${bulan} 
@@ -81,32 +81,44 @@ export async function simpanPenilaian(payload: { user_id: string; bulan: number;
   try {
     const evaluasiString = JSON.stringify(payload.detail_nilai);
 
-    // 🔴 PERBAIKAN 2: Cek dulu apakah data sudah ada. Jika ada UPDATE, jika belum INSERT.
-    // Kita lakukan ini agar tidak error jika tabel DB Anda belum dipasang UNIQUE(user_id, bulan, tahun).
     const { rowCount, rows } = await sql`
       SELECT id FROM penilaian_kinerja 
       WHERE user_id::text = ${payload.user_id} AND bulan = ${payload.bulan} AND tahun = ${payload.tahun}
     `;
 
     if (rowCount && rowCount > 0) {
-      // UPDATE DATA YANG ADA
+      // UPDATE DATA YANG ADA (Sekaligus ubah status bulanan jadi VERIFIED)
       await sql`
         UPDATE penilaian_kinerja 
-        SET detail_nilai = ${evaluasiString}::jsonb 
+        SET detail_nilai = ${evaluasiString}::jsonb,
+            status = 'VERIFIED'
         WHERE id = ${rows[0].id}
       `;
     } else {
-      // INSERT DATA BARU (Dengan status 'DRAFT' otomatis dari default DB Anda)
+      // INSERT DATA BARU (Dengan status VERIFIED)
       await sql`
-        INSERT INTO penilaian_kinerja (user_id, bulan, tahun, detail_nilai)
-        VALUES (${payload.user_id}::uuid, ${payload.bulan}, ${payload.tahun}, ${evaluasiString}::jsonb)
+        INSERT INTO penilaian_kinerja (user_id, bulan, tahun, detail_nilai, status)
+        VALUES (${payload.user_id}::uuid, ${payload.bulan}, ${payload.tahun}, ${evaluasiString}::jsonb, 'VERIFIED')
       `;
     }
 
-    // ... kode insert/update database sebelumnya ...
+    // 🔴 PERBAIKAN UTAMA: Sapu bersih semua status PENDING harian menjadi DISETUJUI
+    // Eksekusi ini akan menyisir seluruh hari di bulan dan tahun yang dievaluasi
+    await sql`
+      UPDATE presensi
+      SET status_verifikasi = 'DISETUJUI'
+      WHERE user_id::text = ${payload.user_id}
+        AND EXTRACT(MONTH FROM tanggal) = ${payload.bulan}
+        AND EXTRACT(YEAR FROM tanggal) = ${payload.tahun}
+        AND status_verifikasi = 'PENDING'
+    `;
 
-    // 🔴 PERBAIKAN: Tambahkan "layout" agar cache halaman cetak ikut terhapus
+    // Refresh cache agar perubahan status langsung terlihat di frontend
     revalidatePath("/admin/penilaian", "layout");
+
+    // Opsional: Jika Anda juga mau me-refresh cache halaman pegawai
+    revalidatePath("/pegawai/riwayat", "layout");
+
     return { success: true };
   } catch (error) {
     console.error("GAGAL SIMPAN PENILAIAN KE DB:", error);

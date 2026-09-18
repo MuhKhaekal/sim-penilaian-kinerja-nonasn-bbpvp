@@ -9,10 +9,11 @@ export default function FilterPeriode({ defaultBulan, defaultTahun }: { defaultB
 
   // Fungsi yang langsung berjalan begitu dropdown diubah nilainya
   const handleFilterChange = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set(key, value);
+    const params = new URLSearchParams(searchParams.toString());
 
-    // Mengubah URL secara instan tanpa memuat ulang seluruh halaman (Soft Navigation)
+    params.set(key, value);
+    params.set("page", "1");
+
     router.replace(`${pathname}?${params.toString()}`);
   };
 

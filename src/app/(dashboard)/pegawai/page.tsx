@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import FormPresensi from "@/components/FormPresensi";
 import { checkDateStatus, getWitaDate } from "@/lib/utils";
 import { getPresensiByDate } from "@/lib/actions/presensi";
+import { getHariLibur } from "@/lib/actions/libur"; // 🔴 Import fungsi libur
 
 type PastData = {
   status_verifikasi: string;
@@ -11,6 +12,19 @@ type PastData = {
   uraian_aktivitas: string;
   kendala: string | null;
   lampiran: string[] | null;
+};
+
+type HariLiburT = {
+  id: string;
+  tanggal: string;
+  keterangan: string;
+};
+
+const formatDateToYMD = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const isSameDay = (d1: Date, d2: Date) => {
@@ -24,31 +38,61 @@ export default function PegawaiDashboard() {
   const [pastData, setPastData] = useState<PastData | null>(null);
   const [isLoadingPast, setIsLoadingPast] = useState(false);
 
-  const status = checkDateStatus(selectedDate);
+  // 🔴 State baru untuk menyimpan daftar tanggal merah dari database
+  const [daftarLibur, setDaftarLibur] = useState<string[]>([]);
+  const [keteranganLibur, setKeteranganLibur] = useState<Record<string, string>>({});
 
-  // 🔴 PERBAIKAN 1: Ekstrak fungsi tarik data agar bisa dipanggil saat form Sukses
+  // Menarik data libur saat halaman pertama kali dimuat
+  useEffect(() => {
+    const fetchLibur = async () => {
+      const res = await getHariLibur();
+      if (res.success && res.data) {
+        // 🔴 PERBAIKAN: Tampung dan cast res.data menjadi HariLiburT[]
+        const dataLibur = res.data as HariLiburT[];
+
+        const arrayTanggal = dataLibur.map((item) => item.tanggal);
+        const mapKeterangan: Record<string, string> = {};
+
+        dataLibur.forEach((item) => {
+          mapKeterangan[item.tanggal] = item.keterangan;
+        });
+
+        setDaftarLibur(arrayTanggal);
+        setKeteranganLibur(mapKeterangan);
+      }
+    };
+    fetchLibur();
+  }, []);
+
+  const baseStatus = checkDateStatus(selectedDate);
+  const dateYMD = formatDateToYMD(selectedDate);
+
+  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+  const isNationalHoliday = daftarLibur.includes(dateYMD);
+  const isOffDay = isWeekend || isNationalHoliday;
+
+  let displayStatus = baseStatus;
+  if (isOffDay) {
+    displayStatus = "LIBUR";
+  }
+
   const fetchPastData = useCallback(async () => {
     setIsLoadingPast(true);
-    const dateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split("T")[0];
-    const response = await getPresensiByDate(dateStr);
+    const response = await getPresensiByDate(dateYMD);
     setPastData(response.data as PastData);
     setIsLoadingPast(false);
-  }, [selectedDate]);
+  }, [selectedDate, dateYMD]);
 
-  // 🔴 PERBAIKAN 2: Cek database jika memilih HARI INI maupun MASA LALU
-  // 🔴 PERBAIKAN 2: Cek database jika memilih HARI INI maupun MASA LALU
-  // Semuanya dibungkus dalam setTimeout agar 100% aman dari Linter React
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (status === "PAST" || status === "TODAY") {
+      if (baseStatus === "PAST" || baseStatus === "TODAY") {
         fetchPastData();
       } else {
         setPastData(null);
       }
     }, 0);
-
     return () => clearTimeout(timer);
-  }, [selectedDate, status, fetchPastData]);
+  }, [selectedDate, baseStatus, fetchPastData]);
 
   const nextMonth = () => setCurrentMonthView(new Date(currentMonthView.getFullYear(), currentMonthView.getMonth() + 1, 1));
   const prevMonth = () => setCurrentMonthView(new Date(currentMonthView.getFullYear(), currentMonthView.getMonth() - 1, 1));
@@ -67,6 +111,7 @@ export default function PegawaiDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
+      {/* ... (Kode Header dan Tombol Hari Ini sama seperti sebelumnya) ... */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-black text-[#003366] tracking-tight">Presensi Harian</h2>
@@ -95,7 +140,7 @@ export default function PegawaiDashboard() {
 
           <div className="grid grid-cols-7 gap-1 text-center mb-2">
             {namaHari.map((hari, i) => (
-              <div key={i} className="text-[11px] font-black text-gray-400 py-1 uppercase">
+              <div key={i} className={`text-[11px] font-black py-1 uppercase ${i === 0 || i === 6 ? "text-red-400" : "text-gray-400"}`}>
                 {hari}
               </div>
             ))}
@@ -108,15 +153,27 @@ export default function PegawaiDashboard() {
               const isToday = isSameDay(date, today);
               const dayStat = checkDateStatus(date);
 
+              const isCellWeekend = date.getDay() === 0 || date.getDay() === 6;
+              const cellYMD = formatDateToYMD(date);
+              const isCellNationalHoliday = daftarLibur.includes(cellYMD);
+              const isCellOffDay = isCellWeekend || isCellNationalHoliday;
+
               let btnClass = "h-10 w-full rounded-lg text-sm font-bold transition-all duration-200 flex items-center justify-center ";
 
-              if (isSelected) btnClass += "bg-[#003366] text-white shadow-md transform scale-105";
-              else if (isToday) btnClass += "bg-blue-50 text-[#003366] border border-blue-200 hover:bg-blue-100";
-              else if (dayStat === "FUTURE") btnClass += "text-gray-300 hover:bg-gray-50 cursor-not-allowed";
-              else btnClass += "text-gray-600 hover:bg-gray-100";
+              if (isSelected) {
+                btnClass += "bg-[#003366] text-white shadow-md transform scale-105";
+              } else if (isToday) {
+                btnClass += "bg-blue-50 text-[#003366] border border-blue-200 hover:bg-blue-100";
+              } else if (dayStat === "FUTURE") {
+                btnClass += "text-gray-300 hover:bg-gray-50 cursor-not-allowed";
+              } else if (isCellOffDay) {
+                btnClass += "text-red-500 bg-red-50 hover:bg-red-100 border border-red-100";
+              } else {
+                btnClass += "text-gray-600 hover:bg-gray-100";
+              }
 
               return (
-                <button key={index} onClick={() => setSelectedDate(date)} className={btnClass}>
+                <button key={index} onClick={() => setSelectedDate(date)} className={btnClass} title={isCellNationalHoliday ? keteranganLibur[cellYMD] : ""}>
                   {date.getDate()}
                 </button>
               );
@@ -125,7 +182,6 @@ export default function PegawaiDashboard() {
         </div>
 
         <div className="md:col-span-7 lg:col-span-8">
-          {/* TAMPILAN LOADING */}
           {isLoadingPast ? (
             <div className="flex flex-col items-center justify-center py-20 text-[#003366] bg-white rounded-2xl shadow-sm border border-gray-100 h-full min-h-[350px]">
               <svg className="animate-spin h-10 w-10 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -136,14 +192,12 @@ export default function PegawaiDashboard() {
             </div>
           ) : (
             <>
-              {/* 🔴 PERBAIKAN 3: Jika HARI INI dan BELUM ADA DATA -> Tampilkan Form */}
-              {status === "TODAY" && !pastData && <FormPresensi onSuccess={fetchPastData} />}
-
-              {/* 🔴 PERBAIKAN 4: Jika ADA DATA (Baik Hari Ini maupun Masa Lalu) -> Tampilkan Bukti */}
-              {pastData && (status === "TODAY" || status === "PAST") && (
+              {/* KONDISI 1: JIKA ADA DATA */}
+              {pastData && (
                 <div className="rounded-2xl bg-white p-6 sm:p-8 border border-gray-100 shadow-sm animate-fade-in-up">
+                  {/* ... (Blok Kode Kondisi 1 dibiarkan sama persis seperti sebelumnya) ... */}
                   <div className="border-b border-gray-100 pb-5 mb-6">
-                    {status === "TODAY" ? (
+                    {baseStatus === "TODAY" ? (
                       <div className="flex items-center gap-3">
                         <div className="bg-green-100 text-green-600 p-2 rounded-full">
                           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,19 +216,12 @@ export default function PegawaiDashboard() {
                       </div>
                     )}
                   </div>
-
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-5 rounded-xl border border-gray-100">
                       <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Persetujuan Atasan</p>
                         <span
-                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold border ${
-                            pastData.status_verifikasi === "PENDING"
-                              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                              : pastData.status_verifikasi === "DISETUJUI"
-                                ? "bg-green-100 text-green-800 border-green-200"
-                                : "bg-red-100 text-red-800 border-red-200"
-                          }`}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold border ${pastData.status_verifikasi === "PENDING" ? "bg-yellow-100 text-yellow-800 border-yellow-200" : pastData.status_verifikasi === "DISETUJUI" ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}`}
                         >
                           {pastData.status_verifikasi}
                         </span>
@@ -184,46 +231,46 @@ export default function PegawaiDashboard() {
                         <p className="font-black text-[#003366] text-lg uppercase tracking-wide">{pastData.status_kehadiran || "Hadir"}</p>
                       </div>
                     </div>
-
                     <div>
                       <p className="text-sm font-bold text-gray-700 mb-2">Uraian Aktivitas Pekerjaan</p>
                       <div className="bg-white text-gray-700 p-4 rounded-xl border border-gray-200 leading-relaxed text-sm shadow-inner">{pastData.uraian_aktivitas}</div>
                     </div>
-
-                    {pastData.kendala && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-2">Kendala yang Dialami</p>
-                        <div className="bg-red-50 text-red-900 p-4 rounded-xl border border-red-100 leading-relaxed text-sm">{pastData.kendala}</div>
-                      </div>
-                    )}
-
-                    <div className="pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2 text-sm text-[#003366] bg-blue-50/50 p-3 rounded-xl border border-blue-100 w-fit">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        <span className="font-bold">{pastData.lampiran?.length || 0} Berkas Digital (Tersimpan Aman)</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
 
-              {/* JIKA MASA LALU TAPI KOSONG (ALFA) */}
-              {status === "PAST" && !pastData && (
-                <div className="text-center py-16 bg-red-50 rounded-2xl border border-red-100 shadow-sm animate-fade-in-up">
-                  <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 shadow-sm">
+              {/* KONDISI 2: JIKA TIDAK ADA DATA & HARI KERJA */}
+              {!pastData && displayStatus === "TODAY" && <FormPresensi onSuccess={fetchPastData} />}
+
+              {/* KONDISI 3: JIKA TIDAK ADA DATA & HARI LIBUR/WEEKEND */}
+              {!pastData && displayStatus === "LIBUR" && (
+                <div className="text-center py-16 bg-orange-50 rounded-2xl border border-orange-200 shadow-sm animate-fade-in-up flex flex-col items-center justify-center h-full min-h-[350px]">
+                  <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600 shadow-sm border border-orange-200">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  {/* 🔴 Fitur Keren: Jika ini libur nasional, tampilkan keterangan spesifik dari database Admin */}
+                  <h4 className="text-orange-800 font-black text-xl mb-2 tracking-tight">{isNationalHoliday ? keteranganLibur[dateYMD] : "Akhir Pekan (Hari Libur)"}</h4>
+                  <p className="text-orange-700 text-sm font-medium max-w-xs">Anda tidak perlu melakukan presensi. Form otomatis ditutup. Selamat beristirahat!</p>
+                </div>
+              )}
+
+              {/* KONDISI 4: ALFA */}
+              {!pastData && displayStatus === "PAST" && (
+                <div className="text-center py-16 bg-red-50 rounded-2xl border border-red-100 shadow-sm animate-fade-in-up flex flex-col items-center justify-center h-full min-h-[350px]">
+                  <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 shadow-sm border border-red-200">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
-                  <h4 className="text-red-800 font-bold text-xl mb-2">Tidak Ada Presensi</h4>
-                  <p className="text-red-600 text-sm font-medium">Anda tercatat Alfa (Mangkir) pada tanggal ini.</p>
+                  <h4 className="text-red-800 font-bold text-xl mb-2 tracking-tight">Tidak Ada Presensi</h4>
+                  <p className="text-red-600 text-sm font-medium">Anda tercatat Alfa (Mangkir) pada hari kerja ini.</p>
                 </div>
               )}
 
-              {/* JIKA MEMILIH HARI ESOK */}
-              {status === "FUTURE" && (
+              {/* KONDISI 5: FUTURE */}
+              {!pastData && displayStatus === "FUTURE" && (
                 <div className="rounded-2xl bg-gray-50 p-10 border border-gray-200 text-center text-gray-500 animate-fade-in-up flex flex-col items-center justify-center h-full min-h-[350px] shadow-sm">
                   <div className="bg-gray-200 p-5 rounded-full mb-5 shadow-inner">
                     <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

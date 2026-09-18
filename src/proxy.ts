@@ -8,7 +8,13 @@ export default withAuth(
 
     // 1. Proteksi Halaman Admin
     if (path.startsWith("/admin") && token?.role !== "ADMIN") {
-      // Jika Pegawai coba masuk ke /admin, tendang balik ke dashboard pegawai
+      // 🔴 PENGECUALIAN: Izinkan Pegawai mengakses rute cetak PDF
+      // Middleware membaca pathname (contoh: /admin/penilaian/123/cetak)
+      if (token?.role === "PEGAWAI" && path.includes("/cetak")) {
+        return NextResponse.next();
+      }
+
+      // Jika Pegawai mencoba masuk ke halaman admin lainnya, tendang balik
       return NextResponse.redirect(new URL("/pegawai", req.url));
     }
 
@@ -23,7 +29,6 @@ export default withAuth(
   {
     callbacks: {
       // Fungsi ini menentukan apakah user diizinkan mengakses matcher atau tidak
-      // Jika mereturn true, lanjut ke fungsi middleware di atas. Jika false, arahkan ke /login.
       authorized: ({ token }) => !!token,
     },
   },

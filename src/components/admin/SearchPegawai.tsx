@@ -1,44 +1,66 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
 
-export default function SearchPegawai({ placeholder }: { placeholder: string }) {
-  const searchParams = useSearchParams();
+interface SearchPegawaiProps {
+  placeholder: string;
+}
+
+export default function SearchPegawai({
+  placeholder,
+}: SearchPegawaiProps) {
+  const router = useRouter();
   const pathname = usePathname();
-  const { replace } = useRouter();
+  const searchParams = useSearchParams();
 
-  // Menangkap kata kunci dari URL jika halaman di-refresh
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("query")?.toString() || "");
+  const [searchTerm, setSearchTerm] = useState(
+    searchParams.get("query") ?? ""
+  );
 
-  // Trik DEBOUNCE: Menunggu user selesai mengetik (300ms) sebelum mengubah URL
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      const params = new URLSearchParams(searchParams);
-      
-      // Jika user mengetik, kembalikan halaman ke 1 dan set query
-      params.set("page", "1"); 
-      
-      if (searchTerm) {
-        params.set("query", searchTerm);
+    const timeout = setTimeout(() => {
+      const currentQuery = searchParams.get("query") ?? "";
+
+      // Tidak melakukan navigasi jika query belum berubah
+      if (searchTerm.trim() === currentQuery) {
+        return;
+      }
+
+      const params = new URLSearchParams(searchParams.toString());
+
+      params.set("page", "1");
+
+      if (searchTerm.trim()) {
+        params.set("query", searchTerm.trim());
       } else {
         params.delete("query");
       }
 
-      // Mengubah URL secara diam-diam tanpa memuat ulang halaman
-      replace(`${pathname}?${params.toString()}`);
+      router.replace(`${pathname}?${params.toString()}`);
     }, 300);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, pathname, replace, searchParams]);
+    return () => clearTimeout(timeout);
+  }, [searchTerm, pathname, router, searchParams]);
 
   return (
     <div className="relative w-full sm:w-80">
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <svg
+          className="h-5 w-5 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 11-14 0z"
+          />
         </svg>
       </div>
+
       <input
         type="text"
         placeholder={placeholder}

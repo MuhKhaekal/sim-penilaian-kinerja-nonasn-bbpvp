@@ -1,30 +1,141 @@
-import { getRiwayatBulanan } from "@/lib/actions/presensi";
+import { getRiwayatBulanan, getEvaluasiTahunan } from "@/lib/actions/presensi";
 import { getWitaDate } from "@/lib/utils";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import Link from "next/link";
 
-// 1. Tipe Data Diperbarui
 type DataPresensi = {
   id: string;
   tanggal: string | Date;
   uraian_aktivitas: string;
+  kendala: string;
   titik_koordinat: string;
   status_verifikasi: string;
-  status_kehadiran?: string; // 🔴 Ditambahkan untuk melacak status
+  status_kehadiran?: string;
   lampiran: string | string[];
 };
 
-// 2. Mendukung Next.js 15+ (Asynchronous searchParams)
-export default async function RiwayatPage({ searchParams }: { searchParams: Promise<{ bulan?: string; tahun?: string }> }) {
+export default async function RiwayatPage({ searchParams }: { searchParams: Promise<{ view?: string; bulan?: string; tahun?: string }> }) {
   const params = await searchParams;
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
   const today = getWitaDate();
 
-  // 3. Logika Filter Default (Bulan Ini)
-  const bulan = params.bulan ? parseInt(params.bulan) : today.getMonth() + 1;
-  const tahun = params.tahun ? parseInt(params.tahun) : today.getFullYear();
+  // Mode Tampilan: "overview" (Tahunan) atau "detail" (Harian)
+  const view = params.view || "overview";
 
+  const tahun = params.tahun ? parseInt(params.tahun) : today.getFullYear();
+  const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+  // ======================================================================
+  // 1. TAMPILAN OVERVIEW (RINGKASAN TAHUNAN)
+  // ======================================================================
+  if (view === "overview") {
+    // Ambil daftar bulan yang sudah dinilai/dievaluasi oleh admin
+    const resEvaluasi = await getEvaluasiTahunan(tahun);
+    const bulanSelesaiDievaluasi = (resEvaluasi.data as number[]) || [];
+
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+
+    return (
+      <div className="max-w-7xl mx-auto space-y-8 animate-fade-in-up">
+        {/* HEADER & FILTER TAHUN */}
+        <div className="bg-white p-6 sm:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-2 h-full bg-[#003366]"></div>
+          <div className="pl-2">
+            <h2 className="text-2xl font-black text-[#003366] tracking-tight">Laporan Kinerja Tahunan</h2>
+            <p className="text-gray-500 text-sm mt-1 font-medium">Pantau status evaluasi dan unduh dokumen kinerja Anda.</p>
+          </div>
+
+          <form method="GET" className="flex items-end gap-3 w-full sm:w-auto bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div className="w-full sm:w-40">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Pilih Tahun</label>
+              <select
+                name="tahun"
+                defaultValue={tahun}
+                className="block w-full rounded-lg border-gray-300 bg-white shadow-sm px-4 py-2.5 text-sm font-medium text-gray-700 focus:border-[#003366] focus:ring-[#003366] outline-none transition-all"
+              >
+                {[2024, 2025, 2026, 2027].map((th) => (
+                  <option key={th} value={th}>
+                    {th}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" className="bg-[#003366] px-6 py-2.5 rounded-lg text-white text-sm font-bold shadow-md hover:bg-[#002244] transition-all">
+              Tampilkan
+            </button>
+          </form>
+        </div>
+
+        {/* GRID 12 KARTU BULAN */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {namaBulan.map((nama, index) => {
+            const bulanAngka = index + 1;
+            const isFuture = tahun > currentYear || (tahun === currentYear && bulanAngka > currentMonth);
+            const isCurrent = tahun === currentYear && bulanAngka === currentMonth;
+            const isEvaluated = bulanSelesaiDievaluasi.includes(bulanAngka);
+
+            return (
+              <div
+                key={bulanAngka}
+                className={`bg-white rounded-2xl border ${isEvaluated ? "border-green-200 shadow-green-100/50" : "border-gray-200"} p-5 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow relative overflow-hidden`}
+              >
+                {/* Badge Status */}
+                <div className="mb-4">
+                  {isFuture ? (
+                    <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">Belum Tersedia</span>
+                  ) : isCurrent ? (
+                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex w-fit items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Sedang Berjalan
+                    </span>
+                  ) : isEvaluated ? (
+                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-green-200">Terverifikasi & Dinilai</span>
+                  ) : (
+                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">Menunggu Penilaian</span>
+                  )}
+                </div>
+
+                <h3 className="text-xl font-black text-gray-900 mb-1">{nama}</h3>
+                <p className="text-xs font-bold text-gray-400 mb-6">Tahun {tahun}</p>
+
+                <div className="mt-auto flex flex-col gap-2">
+                  {!isFuture && (
+                    <Link href={`?view=detail&bulan=${bulanAngka}&tahun=${tahun}`} className="w-full text-center bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-lg text-xs font-bold transition-colors">
+                      Lihat Aktivitas Harian
+                    </Link>
+                  )}
+
+                  {isEvaluated && (
+                    <Link
+                      // 🔴 Sesuaikan URL dengan rute cetak yang ada di aplikasi Anda
+                      href={`/admin/penilaian/${userId}/cetak?bulan=${bulanAngka}&tahun=${tahun}`}
+                      target="_blank"
+                      className="w-full text-center flex items-center justify-center gap-2 bg-[#003366] hover:bg-[#002244] text-white py-2.5 rounded-lg text-xs font-bold shadow-md transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Unduh PDF
+                    </Link>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ======================================================================
+  // 2. TAMPILAN DETAIL (TABEL AKTIVITAS HARIAN)
+  // ======================================================================
+  const bulan = params.bulan ? parseInt(params.bulan) : today.getMonth() + 1;
   const response = await getRiwayatBulanan(bulan, tahun);
   const dataRiwayat = (response.data as DataPresensi[]) || [];
 
-  // 🔴 4. MENGHITUNG STATISTIK KEHADIRAN BULAN INI
   let hadir = 0,
     sakit = 0,
     izin = 0,
@@ -39,54 +150,22 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
     else hadir++;
   });
 
-  const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-fade-in-up">
-      {/* HEADER & FILTER BERSATU DALAM KARTU GLASSMORPHISM */}
+      {/* TOMBOL KEMBALI */}
+      <Link href={`?tahun=${tahun}`} className="inline-flex items-center gap-2 text-[#003366] font-bold hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors w-fit border border-transparent hover:border-blue-100">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Kembali ke Ringkasan Tahun {tahun}
+      </Link>
+
       <div className="bg-white p-6 sm:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 relative overflow-hidden">
-        {/* Aksen Garis Biru */}
         <div className="absolute top-0 left-0 w-2 h-full bg-[#003366]"></div>
-
         <div className="pl-2">
-          <h2 className="text-2xl font-black text-[#003366] tracking-tight">Riwayat Presensi Bulanan</h2>
-          <p className="text-gray-500 text-sm mt-1 font-medium">Rekapitulasi aktivitas dan kehadiran Anda.</p>
+          <h2 className="text-2xl font-black text-[#003366] tracking-tight">Detail Aktivitas Bulan {namaBulan[bulan - 1]}</h2>
+          <p className="text-gray-500 text-sm mt-1 font-medium">Rekapitulasi kehadiran harian Anda.</p>
         </div>
-
-        {/* Form Filter GET bawaan */}
-        <form method="GET" className="flex flex-col sm:flex-row items-end gap-3 w-full xl:w-auto bg-gray-50 p-4 rounded-xl border border-gray-200">
-          <div className="w-full sm:w-40">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Pilih Bulan</label>
-            <select
-              name="bulan"
-              defaultValue={bulan}
-              className="block w-full rounded-lg border-gray-300 bg-white shadow-sm px-4 py-2.5 text-sm font-medium text-gray-700 focus:border-[#003366] focus:ring-[#003366] outline-none transition-all"
-            >
-              {namaBulan.map((nama, index) => (
-                <option key={index + 1} value={index + 1}>
-                  {nama}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="w-full sm:w-32">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Tahun</label>
-            <select
-              name="tahun"
-              defaultValue={tahun}
-              className="block w-full rounded-lg border-gray-300 bg-white shadow-sm px-4 py-2.5 text-sm font-medium text-gray-700 focus:border-[#003366] focus:ring-[#003366] outline-none transition-all"
-            >
-              {[2024, 2025, 2026, 2027].map((th) => (
-                <option key={th} value={th}>
-                  {th}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" className="w-full sm:w-auto bg-[#003366] px-6 py-2.5 rounded-lg text-white text-sm font-bold shadow-md hover:bg-[#002244] active:scale-95 transition-all">
-            Tampilkan
-          </button>
-        </form>
       </div>
 
       {/* KARTU STATISTIK (DASHBOARD MINI) */}
@@ -154,6 +233,7 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
                 <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs">Tanggal</th>
                 <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs">Kehadiran</th>
                 <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs w-1/3">Uraian Aktivitas</th>
+                <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs">Kendala</th>
                 <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs">Dokumentasi</th>
                 <th className="px-6 py-5 font-bold uppercase tracking-wider text-xs">Status Verifikasi</th>
               </tr>
@@ -180,7 +260,6 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
                   } catch (e) {
                     urls = [];
                   }
-
                   const stHadir = (item.status_kehadiran || "Hadir").toLowerCase();
 
                   return (
@@ -189,7 +268,6 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
                         <p className="font-bold text-gray-900">{new Date(item.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}</p>
                         <p className="text-xs text-gray-400">{new Date(item.tanggal).toLocaleDateString("id-ID", { weekday: "long" })}</p>
                       </td>
-
                       <td className="px-6 py-5 whitespace-nowrap">
                         <span
                           className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider border ${
@@ -205,11 +283,12 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
                           {item.status_kehadiran || "Hadir"}
                         </span>
                       </td>
-
                       <td className="px-6 py-5 min-w-[250px]">
                         <p className="line-clamp-2 text-gray-700 font-medium group-hover:text-[#003366] transition-colors">{item.uraian_aktivitas}</p>
                       </td>
-
+                      <td className="px-6 py-5 min-w-[250px]">
+                        <p className="line-clamp-2 text-gray-700 font-medium group-hover:text-[#003366] transition-colors">{item.kendala}</p>
+                      </td>
                       <td className="px-6 py-5">
                         {urls && urls.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
@@ -229,10 +308,9 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
                             ))}
                           </div>
                         ) : (
-                          <span className="text-xs font-medium text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">Tidak ada file</span>
+                          <span className="text-xs font-medium text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">Dibersihkan</span>
                         )}
                       </td>
-
                       <td className="px-6 py-5 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
