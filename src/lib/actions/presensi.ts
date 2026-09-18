@@ -29,7 +29,6 @@ export async function simpanDataPresensi(formData: FormData) {
       
       const blob = await put(fileName, file, { 
         access: 'private', 
-        multipart: true 
       });
       
       lampiranUrls.push(blob.url);

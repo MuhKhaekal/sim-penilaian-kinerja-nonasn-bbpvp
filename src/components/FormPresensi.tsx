@@ -46,7 +46,7 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
     }
 
     const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
-    if (totalSize > 5 * 1024 * 1024) {
+    if (totalSize > 4 * 1024 * 1024) {
       setPesan({ tipe: "error", teks: "Total ukuran tidak boleh lebih dari 5MB." });
       e.target.value = "";
       return;
