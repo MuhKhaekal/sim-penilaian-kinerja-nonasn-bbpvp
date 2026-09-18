@@ -4,17 +4,47 @@ import { useState, useEffect } from "react";
 import { isCutoffPassed } from "@/lib/utils";
 import { simpanDataPresensi } from "@/lib/actions/presensi";
 
-// 🔴 PERBAIKAN 1: Tambahkan prop onSuccess
+// ======================================================================
+// 🔴 KONFIGURASI GEOFENCING (RADIUS LOKASI)
+// ======================================================================
+// Silakan ganti titik ini dengan titik persis Gedung Utama / Gerbang BBPVP
+const KANTOR_LAT = -5.146279756520978; 
+const KANTOR_LNG = 119.4602166571765;
+
+// Batas toleransi radius dalam satuan METER
+const RADIUS_MAKSIMAL = 200; 
+
+// Rumus Haversine untuk menghitung jarak GPS ke Meter secara akurat
+function hitungJarakMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371e3; // Radius bumi dalam meter
+  const p1 = lat1 * (Math.PI / 180);
+  const p2 = lat2 * (Math.PI / 180);
+  const dp = (lat2 - lat1) * (Math.PI / 180);
+  const dl = (lon2 - lon1) * (Math.PI / 180);
+
+  const a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+            Math.cos(p1) * Math.cos(p2) *
+            Math.sin(dl / 2) * Math.sin(dl / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; 
+}
+// ======================================================================
+
 export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) {
-  const [koordinat, setKoordinat] = useState("Mendapatkan lokasi...");
-  const [statusKehadiran, setStatusKehadiran] = useState("Hadir");
+  const [koordinat, setKoordinat] = useState("Mendapatkan lokasi akurat...");
+  const [jarak, setJarak] = useState<number | null>(null);
+  const [isInRadius, setIsInRadius] = useState<boolean>(false);
+  
+  // Status default dibuat kosong agar pengguna WAJIB memilih dari opsi yang terbuka
+  const [statusKehadiran, setStatusKehadiran] = useState(""); 
+  
   const [uraian, setUraian] = useState("");
   const [kendala, setKendala] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-
   const [pesan, setPesan] = useState<{ tipe: "sukses" | "error"; teks: string } | null>(null);
 
   useEffect(() => {
@@ -23,12 +53,29 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
       setIsLocked(currentLockStatus);
 
       if (!currentLockStatus && navigator.geolocation) {
+        // Opsi enableHighAccuracy: true memaksa HP/Laptop mencari sinyal GPS murni, bukan sekadar BTS internet
         navigator.geolocation.getCurrentPosition(
-          (pos) => setKoordinat(`${pos.coords.latitude}, ${pos.coords.longitude}`),
-          (err) => setKoordinat("Gagal mendapatkan lokasi. Pastikan izin GPS aktif."),
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            setKoordinat(`${lat}, ${lng}`);
+            
+            // Hitung jarak saat koordinat didapatkan
+            const jarakMeter = hitungJarakMeters(lat, lng, KANTOR_LAT, KANTOR_LNG);
+            setJarak(Math.round(jarakMeter));
+            
+            // Cek apakah masuk area kantor
+            setIsInRadius(jarakMeter <= RADIUS_MAKSIMAL);
+          },
+          (err) => {
+            setKoordinat("Gagal: Izin GPS ditolak atau sinyal lemah.");
+            setIsInRadius(false);
+          },
+          { enableHighAccuracy: true, maximumAge: 0 }
         );
       } else if (!navigator.geolocation) {
-        setKoordinat("Browser tidak mendukung Geolocation.");
+        setKoordinat("Browser Anda tidak mendukung fitur lokasi.");
+        setIsInRadius(false);
       }
     }, 0);
 
@@ -47,7 +94,7 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
 
     const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
     if (totalSize > 4 * 1024 * 1024) {
-      setPesan({ tipe: "error", teks: "Total ukuran tidak boleh lebih dari 5MB." });
+      setPesan({ tipe: "error", teks: "Total ukuran file tidak boleh lebih dari 4MB agar server stabil." });
       e.target.value = "";
       return;
     }
@@ -59,8 +106,14 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLocked) return;
+    
+    if (statusKehadiran === "") {
+      setPesan({ tipe: "error", teks: "Silakan pilih Status Kehadiran terlebih dahulu." });
+      return;
+    }
+    
     if (files.length === 0) {
-      setPesan({ tipe: "error", teks: "Harap lampirkan minimal 1 bukti." });
+      setPesan({ tipe: "error", teks: "Harap lampirkan minimal 1 bukti foto/dokumen." });
       return;
     }
 
@@ -80,13 +133,12 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
       if (response.success) {
         setPesan({ tipe: "sukses", teks: "Berhasil! Presensi Anda hari ini telah tersimpan." });
         
-        // 🔴 PERBAIKAN 2: Jika berhasil, laporkan ke Dasbor agar form langsung dikunci!
         if (onSuccess) {
           onSuccess();
         } else {
           setUraian("");
           setKendala("");
-          setStatusKehadiran("Hadir");
+          setStatusKehadiran("");
           setFiles([]);
         }
       } else {
@@ -115,23 +167,43 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
       {pesan && <div className={`p-4 rounded-xl text-sm border font-medium ${pesan.tipe === "sukses" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>{pesan.teks}</div>}
 
       <div>
-        <label className="block text-sm font-bold text-gray-700 mb-1">Titik Koordinat (Otomatis)</label>
+        <label className="block text-sm font-bold text-gray-700 mb-1">Titik Koordinat & Pemindai Jarak</label>
         <input type="text" value={koordinat} readOnly className="mt-1 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-500 text-sm font-medium outline-none" />
+        
+        {/* Indikator Status Radius */}
+        {jarak !== null && (
+          <p className={`text-xs mt-2.5 font-bold flex items-center gap-1.5 ${isInRadius ? "text-green-600" : "text-red-500"}`}>
+            {isInRadius ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+            )}
+            Anda berjarak {jarak} meter dari titik tengah kantor (Maksimal: {RADIUS_MAKSIMAL}m).
+          </p>
+        )}
       </div>
 
       <div>
-        <label className="block text-sm font-bold text-gray-700 mb-1">Status Kehadiran</label>
+        <label className="block text-sm font-bold text-gray-700 mb-1">Status Kehadiran <span className="text-red-500">*</span></label>
         <select 
           name="status_kehadiran" 
           required 
           value={statusKehadiran}
           onChange={(e) => setStatusKehadiran(e.target.value)}
-          className="w-full rounded-xl border-gray-300 border px-4 py-3 text-sm font-medium text-gray-900 focus:border-[#003366] focus:ring-[#003366] transition-all bg-gray-50"
+          className={`w-full rounded-xl border px-4 py-3 text-sm font-medium focus:ring-[#003366] transition-all bg-gray-50 ${statusKehadiran === "" ? "text-gray-400 border-gray-300" : "text-gray-900 border-[#003366]"}`}
         >
-          <option value="Hadir">Hadir</option>
-          <option value="Terlambat">Terlambat</option>
-          <option value="Izin">Izin</option>
-          <option value="Sakit">Sakit</option>
+          <option value="" disabled>-- Pilih Status Kehadiran --</option>
+          
+          {/* Opsi Hadir & Terlambat hanya aktif jika isInRadius === true */}
+          <option value="Hadir" disabled={!isInRadius}>
+            Hadir {!isInRadius ? `(Terkunci: Anda berada di luar jangkauan kantor)` : ""}
+          </option>
+          <option value="Terlambat" disabled={!isInRadius}>
+            Terlambat {!isInRadius ? `(Terkunci: Anda berada di luar jangkauan kantor)` : ""}
+          </option>
+          
+          <option value="Izin">Izin (Dari Luar Kantor)</option>
+          <option value="Sakit">Sakit (Dari Luar Kantor)</option>
           <option value="Alfa">Alfa / Mangkir</option>
         </select>
       </div>
@@ -163,7 +235,7 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
 
       <div>
         <label className="block text-sm font-bold text-gray-700 mb-1">
-          Lampiran Bukti Kerja (Max 3 File, Total 5MB) <span className="text-red-500">*</span>
+          Lampiran Bukti Kerja (Max 3 File, Total 4MB) <span className="text-red-500">*</span>
         </label>
         <input
           type="file"
@@ -176,8 +248,8 @@ export default function FormPresensi({ onSuccess }: { onSuccess?: () => void }) 
       </div>
 
       <div className="pt-2">
-        <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-[#003366] px-4 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-[#002244] disabled:bg-gray-400 transition-all transform hover:-translate-y-0.5">
-          {isLoading ? "Mengunggah..." : "Simpan Presensi Hari Ini"}
+        <button type="submit" disabled={isLoading || jarak === null} className="w-full rounded-xl bg-[#003366] px-4 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-[#002244] disabled:bg-gray-400 transition-all transform hover:-translate-y-0.5">
+          {isLoading ? "Mengunggah..." : jarak === null ? "Mencari Sinyal GPS..." : "Simpan Presensi Hari Ini"}
         </button>
       </div>
     </form>
