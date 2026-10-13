@@ -1,0 +1,9 @@
+
+{
+  "crons": [
+    {
+      "path": "/api/cron/presensi-alfa",
+      "schedule": "5 16 * * *"
+    }
+  ]
+}
